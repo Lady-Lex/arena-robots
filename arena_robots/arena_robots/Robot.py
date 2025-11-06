@@ -1,13 +1,12 @@
 import typing
 
 import yaml
-from arena_simulation_setup.tree import StaticProvider
+from ament_index_python.packages import get_package_share_path
+from arena_simulation_setup.tree import ProviderBase, StaticProvider
+from arena_simulation_setup.utils.models import ModelWrapper
 from arena_simulation_setup.utils.models.model_loader import (
-    ModelLoader,
     ModelProvider_URDF,
 )
-
-from arena_robots import ARENA_ROBOTS_DIR
 
 
 class ModelParams(dict[str, typing.Any]):
@@ -31,7 +30,7 @@ class ModelParams(dict[str, typing.Any]):
         return self.get('z_offset', 0.0)
 
 
-class RobotProvider(StaticProvider):
+class RobotProvider(StaticProvider[ModelWrapper], ProviderBase[ModelWrapper]):
 
     def __init__(self, name: str) -> None:
         super().__init__(name)
@@ -54,7 +53,16 @@ class RobotProvider(StaticProvider):
             assert isinstance(mapping, dict), "Control file must contain a dictionary at the top level."
             return mapping
 
+    def load(self, **kwargs) -> ModelWrapper:
+        resolved = self.resolve(self.name)
+        if resolved is None:
+            raise FileNotFoundError(f'Object model {self.name} not found')
+        return ModelWrapper(
+            self.name,
+            {
+                **ModelProvider_URDF.asdict(resolved, resolved.name),
+            }
+        )
 
-Robot = RobotProvider.bind(ARENA_ROBOTS_DIR / 'robots')
 
-loader = ModelLoader(Robot, (ModelProvider_URDF,))
+RobotLoader = RobotProvider.bind(get_package_share_path('arena_robots') / 'robots')
