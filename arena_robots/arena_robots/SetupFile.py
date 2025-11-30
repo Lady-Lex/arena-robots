@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import itertools
+from pathlib import Path
 import typing
 from collections.abc import Sequence
 
 import attrs
 import yaml
-from arena_simulation_setup.tree import StaticProvider
+from arena_simulation_setup.tree import Identifier, ResolverBase
 
 from arena_robots import ARENA_ROBOTS_DIR
 
@@ -33,15 +34,23 @@ class Config:
         return tuple(cls(**data) for _ in range(data.pop('count', 1)))
 
 
-class Provider(StaticProvider):
+class RobotSetupResolver(ResolverBase):
+    base_path = ARENA_ROBOTS_DIR / 'config' / 'setup'
 
-    def load(self) -> Sequence[Config]:
-        with open(self.path, 'r') as f:
+    async def resolve(self, identifier):
+        target_path = self.base_path / f'{identifier.name}.yaml'
+        if target_path.exists():
+            return target_path
+        return None
+
+
+class RobotSetupIdentifier(Identifier[list[Config]]):
+
+    def load(self, path: Path, /, **kwargs) -> list[Config]:
+        del kwargs  # unused
+        with open(path, 'r') as f:
             configuration = yaml.safe_load(f)
 
         assert isinstance(configuration, list), "robot_setup.yaml must be a list"
 
         return list(itertools.chain.from_iterable(map(Config.parse, configuration)))
-
-
-RobotSetup = Provider.bind(ARENA_ROBOTS_DIR / 'config' / 'setup')
